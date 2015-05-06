@@ -1,20 +1,21 @@
 #import <XCTest/XCTest.h>
 
-#import "Mixpanel.h"
-#import "MPNotification.h"
-#import "MPSurvey.h"
-#import "MPSurveyQuestion.h"
-#import "HTTPServer.h"
-#import "MixpanelDummyHTTPConnection.h"
-#import "MPSurveyNavigationController.h"
-#import "MPNotificationViewController.h"
 #import <objc/runtime.h>
+#import "HTTPServer.h"
+#import "Mixpanel.h"
+#import "MixpanelDummyHTTPConnection.h"
+#import "MPNotification.h"
+#import "MPNotificationViewController.h"
+#import "MPSurvey.h"
+#import "MPSurveyNavigationController.h"
+#import "MPSurveyQuestion.h"
 
 #define TEST_TOKEN @"abc123"
 
 #pragma mark - Interface Redefinitions
 
 @interface Mixpanel (Test)
+
 // get access to private members
 
 @property (nonatomic, retain) NSMutableArray *eventsQueue;
@@ -41,6 +42,7 @@
 @end
 
 @interface MixpanelPeople (Test)
+
 // get access to private members
 
 @property (nonatomic, retain) NSMutableArray *unidentifiedQueue;
@@ -53,7 +55,7 @@
  version of XCTest does not support asynchonous tests and
  will not compile unless we define these symbols.
  */
-#if !__has_include("XCTest/XCTextCase+AsynchronousTesting.h")
+#if !__has_include("XCTest/XCTestCase+AsynchronousTesting.h")
 @interface XCTestExpectation
 
 - (void)fulfill;
@@ -274,7 +276,7 @@
 - (void)testFlushFailure
 {
     [self setupHTTPServer];
-    self.mixpanel.serverURL = @"http://0.0.0.0";
+    self.mixpanel.serverURL = @"http://a.b.c.d"; //invalid
     self.mixpanel.delegate = self;
     self.mixpanelWillFlush = YES;
     int requestCount = [MixpanelDummyHTTPConnection getRequestCount];
@@ -1044,7 +1046,7 @@
                         @"body": @"body",
                         @"cta": @"cta",
                         @"cta_url": @"maps://",
-                        @"image_url": @"http://mixpanel.com"};
+                        @"image_url": @"http://mixpanel.com/coolimage.png"};
 
     XCTAssertNotNil([MPNotification notificationWithJSONObject:o]);
 
@@ -1110,7 +1112,7 @@
                         @"body": @"body",
                         @"cta": @"cta",
                         @"cta_url": @"maps://",
-                        @"image_url": @"http://mixpanel.com"};
+                        @"image_url": @"http://cdn.mxpnl.com/site_media/images/engage/inapp_messages/mini/icon_coin.png"};
     MPNotification *notif = [MPNotification notificationWithJSONObject:o];
     [self.mixpanel showNotificationWithObject:notif];
     [self.mixpanel showNotificationWithObject:notif];
@@ -1129,9 +1131,11 @@
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
             self.mixpanel.currentlyShowingNotification = nil;
             self.mixpanel.notificationViewController = nil;
-            [(MPNotificationViewController *)topVC hideWithAnimation:YES completion:^{
-                [expectation fulfill];
-            }];
+            if([topVC isKindOfClass:[MPNotificationViewController class]]) {
+                [(MPNotificationViewController *)topVC hideWithAnimation:YES completion:^void{
+                    [expectation fulfill];
+                }];
+            }
         });
         [self waitForExpectationsWithTimeout:self.mixpanel.miniNotificationPresentationTime * 2 handler:nil];
     }
@@ -1204,26 +1208,31 @@
     NSDictionary *e = self.mixpanel.eventsQueue.lastObject;
     NSDictionary *p = e[@"properties"];
     XCTAssertNil(p[@"$duration"], @"New events should not be timed.");
-    
+
     [self.mixpanel timeEvent:@"400 Meters"];
-    
+
     [self.mixpanel track:@"500 Meters"];
     [self waitForSerialQueue];
     e = self.mixpanel.eventsQueue.lastObject;
     p = e[@"properties"];
     XCTAssertNil(p[@"$duration"], @"The exact same event name is required for timing.");
-    
+
     [self.mixpanel track:@"400 Meters"];
     [self waitForSerialQueue];
     e = self.mixpanel.eventsQueue.lastObject;
     p = e[@"properties"];
     XCTAssertNotNil(p[@"$duration"], @"This event should be timed.");
-    
+
     [self.mixpanel track:@"400 Meters"];
     [self waitForSerialQueue];
     e = self.mixpanel.eventsQueue.lastObject;
     p = e[@"properties"];
     XCTAssertNil(p[@"$duration"], @"Tracking the same event should require a second call to timeEvent.");
+}
+
+- (void)testTelephonyInfoInitialized
+{
+    XCTAssertNotNil([self.mixpanel performSelector:@selector(telephonyInfo)], @"telephonyInfo wasn't initialized");
 }
 
 @end
